@@ -4,8 +4,17 @@ import time
 import matplotlib.pyplot as plt
 from utils import *
 
+st.set_page_config(
+    page_title="Real-Time EEG Emotion Detection",
+    page_icon="🧠",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
 # Title and Intro
 st.title("Real-Time EEG Emotion Detection")
+
+
 st.write("Welcome to the Real-Time EEG Emotion Detection Simulator!")
 
 # Explanation Section
@@ -35,8 +44,11 @@ st.write("File loaded successfully. Starting simulation...")
 
 # Load video or image for visualization
 person_photo_path = f"media/1.mp4"
-
 video_placeholder.video(person_photo_path)
+
+# Initialize statistics table
+if "statistics" not in st.session_state:
+    st.session_state.statistics = []
 
 # Simulate with media
 if st.button("Start Simulation"):
@@ -52,13 +64,16 @@ if st.button("Start Simulation"):
             f"Data Shape: {trial_count} trials, {channel_count} channels, {data_length} data points"
         )
 
-        plot_placeholder = st.empty()
+        plot_placeholder = st.empty()  # For accumulated signal
+        segment_plot_placeholder = st.empty()  # For 4-second sliding window
         prediction_placeholder = st.empty()
+        stats_placeholder = st.empty()
 
         for trial in range(trial_count):
             st.write(f"Simulating Trial {trial + 1}...")
 
             for t in range(0, data_length, 64):
+                # Plot accumulated signals
                 fig, ax = plt.subplots(figsize=(15, 6))
 
                 for channel in channels:
@@ -75,13 +90,56 @@ if st.button("Start Simulation"):
 
                 plot_placeholder.pyplot(fig, clear_figure=True)
 
-                if t % (4 * 128) == 0 and t >= 512:
-                    time_segment = t // (4 * 128)
-                    eeg_data_segment = eeg_data[trial, :, t - 512 : t]
-                    prediction = make_prediction(trial, time_segment, eeg_data_segment)
-                    prediction_placeholder.markdown(f"### **{prediction}**")
+                # Plot non-accumulated 4-second sliding window (updated every 0.5 seconds)
+                if t >= 512:  # Ensure we have at least 4 seconds of data
+                    fig_segment, ax_segment = plt.subplots(figsize=(15, 6))
+                    start_idx = max(
+                        0, t - 512
+                    )  # 4 seconds = 512 data points (128 Hz * 4)
+                    end_idx = t
 
-                time.sleep(0.5)
+                    for channel in channels:
+                        signal_segment = eeg_data[trial, channel, start_idx:end_idx]
+                        time_axis_segment = np.arange(len(signal_segment)) / 128
+                        ax_segment.plot(
+                            time_axis_segment,
+                            signal_segment,
+                            label=f"Channel {channel + 1}",
+                        )
+
+                    ax_segment.set_title(
+                        f"Trial {trial + 1} - EEG Channels ({start_idx/128:.2f} to {end_idx/128:.2f} seconds)"
+                    )
+                    ax_segment.set_xlabel("Time (s)")
+                    ax_segment.set_ylabel("Amplitude")
+                    ax_segment.legend(loc="upper right", fontsize="small")
+
+                    segment_plot_placeholder.pyplot(fig_segment, clear_figure=True)
+
+                    # Make prediction and update statistics every 4 seconds
+                    if t % (4 * 128) == 0:
+                        time_segment = t // (4 * 128)
+                        eeg_data_segment = eeg_data[trial, :, start_idx:end_idx]
+                        prediction = make_prediction(
+                            trial, time_segment, eeg_data_segment
+                        )
+                        prediction_placeholder.markdown(f"### **{prediction}**")
+
+                        # Update statistics table
+                        st.session_state.statistics.append(
+                            {
+                                "Trial": trial + 1,
+                                "Segment": time_segment + 1,
+                                "Start Time (s)": start_idx / 128,
+                                "End Time (s)": end_idx / 128,
+                                "Prediction": prediction,
+                            }
+                        )
+
+                        # Display statistics table
+                        stats_placeholder.table(st.session_state.statistics)
+
+                time.sleep(0.5)  # Update every 0.5 seconds
 
             st.write(f"Trial {trial + 1} completed.")
 
