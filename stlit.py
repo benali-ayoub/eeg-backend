@@ -4,13 +4,6 @@ import time
 import matplotlib.pyplot as plt
 from utils import *
 
-st.set_page_config(
-    page_title="Real-Time EEG Emotion Detection",
-    page_icon="🧠",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
 # Title and Intro
 st.title("Real-Time EEG Emotion Detection")
 
